@@ -1,0 +1,45 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "description": "This is an example node app owned by 1337",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "type": "module",
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/src/index.js",
+    "watch": "tsx --watch src/*.ts",
+    "dev": "tsx src/index.ts",
+    "docker:pg:start": "docker run --name postgres -e POSTGRES_PASSWORD=password -e POSTGRES_DB=node_app -p 5432:5432 -d postgres:16-alpine",
+    "docker:pg:stop": "docker stop postgres && docker rm postgres",
+    "docker:redis:start": "docker run --name redis -p 6379:6379 -d redis:7-alpine",
+    "docker:redis:stop": "docker stop redis && docker rm redis",
+    "db:migrate-dev": "prisma migrate dev --schema src/schema.prisma",
+    "db:migrate": "prisma db push --schema src/schema.prisma"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/helmet": "^11.1.1",
+    "@fastify/jwt": "^8.0.1",
+    "@fastify/postgres": "^5.2.2",
+    "@fastify/redis": "^6.2.0",
+    "bcrypt": "^5.1.1",
+    "fastify": "^4.27.0",
+    "pino": "^9.1.0",
+    "prisma": "^5.15.0"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/node": "^20.14.2",
+    "eslint": "^9.4.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.3",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.13.2",
+    "typescript": "^5.4.5"
+  }
+}
