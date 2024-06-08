@@ -1,5 +1,4 @@
-import Fastify, { FastifyRequest, FastifyInstance } from 'fastify';
-import FastifyPostgres from '@fastify/postgres'
+import Fastify, { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import FastifyRedis from '@fastify/redis'
 import fastifyHelmet from '@fastify/helmet';
 import fastifyJWT from '@fastify/jwt'
@@ -7,9 +6,23 @@ import { Redis } from 'ioredis'
 import { AddressInfo } from 'net'
 import Pino from 'pino'
 import { hashPassword, comparePassword } from './utils.js'
+import { PrismaClient } from '@prisma/client'
 import { PG_URL, REDIS_HOST, REDIS_PORT, PORT, HOST, ENV, ENVIRONMENTS, JWT_SECRET, ROLES } from './config.js'
 
+declare global {
+  interface BigInt {
+    toJSON(): number | string;
+  }
+}
+BigInt.prototype.toJSON = function () {
+  const int = Number.parseInt(this.toString());
+  return int ?? this.toString();
+};
+
 const log = Pino({ level: 'info' })
+const prisma = new PrismaClient({
+  log: ENV === ENVIRONMENTS.PRODUCTION ? ['error', 'warn'] : ['query', 'error', 'info', 'warn']
+});
 const fastify = Fastify({ logger: log })
 
 fastify.register(fastifyHelmet);
@@ -17,92 +30,126 @@ fastify.register(fastifyHelmet);
 fastify.register(fastifyJWT, {
   secret: JWT_SECRET,
   sign: { expiresIn: ENV === ENVIRONMENTS.DEVELOPMENT ? '1h' : '7d' },
+  formatUser: (user: any) => ({ id: user.id, role: user.role })
 })
 
-// Set Postgresql
-fastify.register(FastifyPostgres, { connectionString: PG_URL })
 
+declare module 'fastify' {
+  interface FastifyInstance {
+    authenticate(request: FastifyRequest, reply: FastifyReply): Promise<void>;
+  }
+}
+
+fastify.decorate("authenticate", async function(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    await request.jwtVerify()
+  } catch (err) {
+    reply.code(401).send('INVALID_CREDENTIALS')
+  }
+})
 // Redis
 fastify.register(FastifyRedis, { client: new Redis({ host: REDIS_HOST, port: REDIS_PORT }) })
 
 fastify.get('/health', async (req: any, reply: any) => {
-  const pgClient = await fastify.pg.connect()
   try {
-    const [{ rowCount }, RedisRes] = await Promise.all([
-      pgClient.query('SELECT 1'),
+    const [pgLive, RedisRes] = await Promise.all([
+      await prisma.$queryRaw`SELECT 1`,
       fastify.redis.ping()
     ])
-    if (rowCount !== 1 || RedisRes !== 'PONG') {
+    if (!pgLive || RedisRes !== 'PONG') {
       throw new Error('Failed to connect to Postgres OR Redis');
     }
     log.info(`Postgres and Redis are healthy`);
-    return reply
-      .code(200)
-      .type('text/plain')
-      .send('OK');
+    return reply.code(200).type('text/plain').send('OK');
   }
   catch (err) {
-    return reply
-      .code(500)
-      .type('text/plain')
-      .send('NOT_OK');
-  }
-  finally {
-    // Release the client immediately after query resolves, or upon error
-    pgClient.release()
+    return reply.code(500).type('text/plain').send('NOT_OK');
   }
 });
 
 fastify.post('/login', async (req, reply) => {
-  const client = await fastify.pg.connect();
   const { email, password } = req.body as { email: string, password: string };
   try {
-      const { rows } = await client.query(`SELECT * FROM users WHERE email = '${email}' LIMIT 1`);
-      if (rows.length === 0) {
-          return reply.code(404).send({ error: 'User not found' });
-      }
-      const user = rows[0];
-      if (!comparePassword(password, user.password)) {
-          return reply.code(401).send({ error: 'Invalid password' });
-      }
-      return reply.code(200).send({ token: fastify.jwt.sign({ id: user.id, role: user.role }) });
+    const user = await prisma.users.findFirst({ where: { email } });
+    if (!user) {
+        return reply.code(404).send({ error: 'User not found' });
+    }
+    if (!comparePassword(password, (user as { password: string }).password)) {
+        return reply.code(401).send({ error: 'Invalid password' });
+    }
+    return reply.code(200).send({ token: fastify.jwt.sign({ id: user.id, role: user.role }) });
   }
-  finally {
-      // Release the client immediately after query resolves, or upon error
-      client.release();
+  catch (err: any) {
+    return reply.code(500).send({ error: err?.message ?? 'Unable to find user by email' });
   }
 });
-
 
 // Create user
 fastify.post('/users', async (req: any, reply: any) => {
-  const client = await fastify.pg.connect()
-  const { email, name, password } = req.body;
-  const hashedPassword = hashPassword(password);
+
+  const { email, name, phone } = req.body;
   try {
-    const { rows } = await client.query(`INSERT INTO users (name, email, password, role) VALUES ('${name}', '${email}', '${hashedPassword}', '${ROLES.USER}') RETURNING *`)
-    return reply.code(201).send({ user: { name: rows[0].name, email: rows[0].email } });
+    const hashedPassword = await hashPassword(req.body.password);
+    const result = await prisma.users.create({
+      data: {
+        email,
+        phone,
+        name,
+        password: hashedPassword,
+      }
+    });
+    const { password, ...restOfObj } = result;
+    return reply.code(201).send(restOfObj);
   } catch (err: any) {
+    if (err.code === '23505') {
+      return reply.code(409).send({ error: 'User already exists' });
+    }
+    req.log.error(err?.message);
     return reply.code(500).send({ error: err?.message });
-  } finally {
-    // Release the client immediately after query resolves, or upon error
-    client.release()
   }
 });
 
-fastify.get('/user/:id', async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
-  const client = await fastify.pg.connect()
+const getUserByIdHandler = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
   const { id } = req.params;
   try {
-    const { rows } = await client.query(
-      `SELECT * FROM users WHERE id = ${id}`,
-    )
-    // Note: avoid doing expensive computation here, this will block releasing the client
-    return rows
-  } finally {
-    // Release the client immediately after query resolves, or upon error
-    client.release()
+    log.info(`Fetching user with id: ${id}, by user: ${(req.user as { id: number }).id} / ${(req.user as { role: string }).role}`)
+    const {password, ...restOfObj} = await prisma.users.findFirst({ where: { id: parseInt(id) } }) as any;
+    return reply.code(200).send(restOfObj)
+  } catch (err: any) {
+    return reply.code(500).send({ error: err?.message });
   }
+};
+
+type RouteGenericInterface = {
+  Params: { id: string };
+};
+
+fastify.get<RouteGenericInterface>('/users/:id', { onRequest: [fastify.authenticate] }, getUserByIdHandler);
+
+fastify.get('/users/me', async (req: any, reply: any) => {
+  // get user id from jwt
+  const { id } = req.user;
+  try {
+    const { password, ...restOfObj } = await prisma.users.findFirst({ where: { id } }) as any;
+    return reply.code(200).send(restOfObj);
+  } catch (err: any) {
+    return reply.code(500).send({ error: err?.message });
+  }
+})
+
+/**
+ * Store key-value pair in Redis
+ */
+fastify.post('/cache', async (req: any, reply: any) => {
+  const { key, value } = req.body;
+  await fastify.redis.set(key, value);
+  return reply.code(201).send({ key, value });
+})
+
+fastify.get('/cache/:key', async (req: any, reply: any) => {
+  const { key } = req.params;
+  const value = await fastify.redis.get(key);
+  return reply.code(200).send({ key, value });
 })
 
 fastify.listen({ port: PORT, host: HOST }, (err: Error | null) => {
@@ -110,6 +157,6 @@ fastify.listen({ port: PORT, host: HOST }, (err: Error | null) => {
     log.error(`[${err?.name}] ${err?.message}`);
     throw err
   }
-  const address = fastify.server.address() as AddressInfo | null;
-  fastify.log.info(`server listening on ${address}:${address?.port}`);
+  const { address, port } = fastify.server.address() as AddressInfo | null || { address: HOST, port: PORT };
+  fastify.log.info(`server listening on ${address}:${port}`);
 })

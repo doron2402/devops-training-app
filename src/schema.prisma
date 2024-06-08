@@ -1,3 +1,6 @@
+generator client {
+  provider = "prisma-client-js"
+}
 
 datasource db {
   provider = "postgresql"
@@ -5,19 +8,19 @@ datasource db {
 }
 
 enum Role {
-  USER
-  ADMIN
+  USER @map("user")
+  ADMIN @map("admin")
 }
 
 model users {
-  id String @id @default(uuid())
+  id    BigInt @id @default(autoincrement())
   email String  @unique
-  name  String?
-  phone String? @unique
+  name  String
+  phone String @unique
   password String
   role Role @default(USER)
   createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  updatedAt  DateTime?  @updatedAt
 }
 
 

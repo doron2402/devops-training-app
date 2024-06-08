@@ -15,7 +15,6 @@ export const ENVIRONMENTS = {
 
 export const ENV = process.env.NODE_ENV || process.env.ENV || 'development'; // development, staging, production, test
 
-
 export const ROLES = {
   ADMIN: 'admin',
   USER: 'user',
