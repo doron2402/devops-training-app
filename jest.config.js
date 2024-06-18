@@ -10,6 +10,6 @@ const config = {
   testMatch: ['<rootDir>/tests/**/?(*.)+(spec|test).ts'],
   testEnvironment: 'node',
   setupFiles: ['<rootDir>/test-setup.js'],
-}
+};
 
-export default config
+export default config;

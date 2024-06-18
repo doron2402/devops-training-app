@@ -7,7 +7,7 @@ import { AddressInfo } from 'net'
 import Pino from 'pino'
 import { hashPassword, comparePassword } from './utils.js'
 import { PrismaClient } from '@prisma/client'
-import { PG_URL, REDIS_HOST, REDIS_PORT, PORT, HOST, ENV, ENVIRONMENTS, JWT_SECRET, ROLES } from './config.js'
+import { REDIS_HOST, REDIS_PORT, PORT, HOST, ENV, ENVIRONMENTS, JWT_SECRET } from './config.js'
 
 declare global {
   interface BigInt {
