@@ -2,6 +2,7 @@
 
 ## About the stack
 - Nodejs application running on node LTS 20.13.1 (check .nvmrc file)
+Make sure to run `nvm use` to set your local node version. you can install it using  `curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash`
 - Postgresql DB
 - Redis DB
 - Fastify Node.js framework
