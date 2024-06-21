@@ -15,10 +15,11 @@ RUN npm prune --production
 ENV PORT 8080
 
 EXPOSE 8080
-
 # TODO: remove this, DB migrations should run as part of the ci/cd pipeline
 # and not as part of the container startup
 # REMOVE THIS LINE BEFORE PRODUCTION
-RUN npm run db:migrate
+# RUN npm run db:migrate-dev
+
+# RUN npm run db:migrate
 
 CMD [ "node", "dist/index.js" ]
