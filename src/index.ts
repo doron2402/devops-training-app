@@ -126,7 +126,7 @@ type RouteGenericInterface = {
 
 fastify.get<RouteGenericInterface>('/users/:id', { onRequest: [fastify.authenticate] }, getUserByIdHandler);
 
-fastify.get('/users/me', async (req: any, reply: any) => {
+fastify.get('/me', async (req: any, reply: any) => {
   // get user id from jwt
   const { id } = req.user;
   try {
