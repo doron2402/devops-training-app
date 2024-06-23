@@ -7,25 +7,26 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgres://user:password@db:5432/node_app
-      PG_URL: postgres://user:password@db:5432/node_app
-      REDIS_URL: redis://cache:6379
+      REDIS_HOST: cache
+      PORT: 8000
+      PG_URL: postgres://postgres:password@db:5432/node_app
     depends_on:
       - db
       - cache
     restart: always
 
   db:
-    image: postgres:16-alpine
+    image: postgres:14.5-alpine
     environment:
-      POSTGRES_USER: user
+      POSTGRES_USER: postgres
+      POSTGRES_USERNAME: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: node_app
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
   cache:
-    image: redis:7-alpine
+    image: redis:6-alpine
     volumes:
       - redis_data:/data
 
