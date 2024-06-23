@@ -50,6 +50,10 @@ fastify.decorate("authenticate", async function(request: FastifyRequest, reply: 
 // Redis
 fastify.register(FastifyRedis, { client: new Redis({ host: REDIS_HOST, port: REDIS_PORT }) })
 
+fastify.get('/heartbeat', async (req: any, reply: any) => {
+  return reply.code(200).type('text/plain').send('OK');
+});
+
 fastify.get('/health', async (req: any, reply: any) => {
   try {
     const [pgLive, RedisRes] = await Promise.all([
