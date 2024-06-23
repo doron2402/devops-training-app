@@ -1,7 +1,7 @@
 export const PG_URL = process.env.PG_URL || 'postgres://postgres:password@db:5432/node_app';
 export const PORT = Number(process.env.PORT || 8080);
 export const HOST = process.env.HOST || '0.0.0.0';
-export const REDIS_HOST = process.env.REDIS_URL || 'cache';
+export const REDIS_HOST = process.env.REDIS_HOST || 'cache';
 export const REDIS_PORT = Number(process.env.REDIS_PORT || 6379);
 export const JWT_SECRET = process.env.JWT_SECRET || 'shhhhhhhh...this is a super secret';
 
